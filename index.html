@@ -99,6 +99,20 @@
         renderList();
     }
 </script>
+<script>
+    function toggleEdit(id) {
+        const textEl = document.getElementById(`text-${id}`);
+        const formEl = document.getElementById(`form-${id}`);
+        if (formEl.style.display === 'none') {
+            formEl.style.display = 'inline';
+            textEl.style.display = 'none';
+        } else {
+            formEl.style.display = 'none';
+            textEl.style.display = 'inline';
+        }
+    }
+</script>
+
 
 </body>
 </html>
