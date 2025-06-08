@@ -1,4 +1,3 @@
-// index.js
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
@@ -6,47 +5,39 @@ const mysql = require('mysql2/promise');
 
 const PORT = 3000;
 
-// Database connection settings
 const dbConfig = {
     host: 'localhost',
     user: 'root',
-    password: 'pass',
+    password: '',
     database: 'todolist',
 };
 
 async function retrieveListItems() {
-    try {
-        const connection = await mysql.createConnection(dbConfig);
-        const query = 'SELECT id, text FROM items';
-        const [rows] = await connection.execute(query);
-        await connection.end();
-        return rows;
-    } catch (error) {
-        console.error('Error retrieving list items:', error);
-        throw error;
-    }
+    const connection = await mysql.createConnection(dbConfig);
+    const [rows] = await connection.execute('SELECT id, text FROM items');
+    await connection.end();
+    return rows;
+}
+
+async function updateItemInDatabase(id, text) {
+    const connection = await mysql.createConnection(dbConfig);
+    await connection.execute('UPDATE items SET text = ? WHERE id = ?', [text, id]);
+    await connection.end();
 }
 
 async function getHtmlRows() {
     const todoItems = await retrieveListItems();
-    return todoItems.map((item, index) => `
-        <tr>
-            <td>${index + 1}</td>
-            <td>
-                <span id="text-${item.id}">${item.text}</span>
-                <form id="form-${item.id}" method="POST" action="/edit" style="display:none;">
-                    <input type="hidden" name="id" value="${item.id}" />
-                    <input type="text" name="text" value="${item.text}" />
-                    <button type="submit">Сохранить</button>
-                </form>
-            </td>
-            <td><button onclick="toggleEdit(${item.id})">Редактировать</button></td>
+    return todoItems.map(item => `
+        <tr id="row-${item.id}">
+            <td>${item.id}</td>
+            <td>${item.text}</td>
+            <td><button onclick="enableEdit(${item.id}, '${item.text.replace(/'/g, "\\'")}')">Edit</button></td>
         </tr>
     `).join('');
 }
 
 async function handleRequest(req, res) {
-    if (req.url === '/' && req.method === 'GET') {
+    if (req.method === 'GET' && req.url === '/') {
         try {
             const html = await fs.promises.readFile(
                 path.join(__dirname, 'index.html'),
@@ -56,33 +47,33 @@ async function handleRequest(req, res) {
             res.writeHead(200, { 'Content-Type': 'text/html' });
             res.end(processedHtml);
         } catch (err) {
-            console.error(err);
-            res.writeHead(500, { 'Content-Type': 'text/plain' });
-            res.end('Error loading index.html');
+            res.writeHead(500);
+            res.end('Error loading HTML');
         }
+
     } else if (req.method === 'POST' && req.url === '/edit') {
         let body = '';
         req.on('data', chunk => body += chunk);
         req.on('end', async () => {
-            const parsed = new URLSearchParams(body);
-            const id = parsed.get('id');
-            const text = parsed.get('text');
-
             try {
-                const connection = await mysql.createConnection(dbConfig);
-                await connection.execute('UPDATE items SET text = ? WHERE id = ?', [text, id]);
-                await connection.end();
-
-                res.writeHead(302, { Location: '/' });
-                res.end();
+                const { id, text } = JSON.parse(body);
+                if (id && text && typeof text === 'string') {
+                    await updateItemInDatabase(id, text);
+                    res.writeHead(200);
+                    res.end('Item updated');
+                } else {
+                    res.writeHead(400);
+                    res.end('Invalid input');
+                }
             } catch (err) {
-                console.error('Error updating item:', err);
+                console.error(err);
                 res.writeHead(500);
-                res.end('Internal Server Error');
+                res.end('Server error');
             }
         });
+
     } else {
-        res.writeHead(404, { 'Content-Type': 'text/plain' });
+        res.writeHead(404);
         res.end('Route not found');
     }
 }
