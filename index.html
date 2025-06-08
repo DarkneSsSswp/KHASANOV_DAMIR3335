@@ -27,18 +27,12 @@
         #todoList th:nth-child(2) {
             width: 90%;
         }
-        .add-form {
-            margin-top: 20px;
-            width: 70%;
-            margin: 20px auto;
+        .edit-input {
+            width: 90%;
+            padding: 4px;
         }
-        .add-form input[type="text"] {
-            padding: 8px;
-            width: 70%;
-        }
-        .add-form button {
-            padding: 8px;
-            width: 20%;
+        .save-btn {
+            padding: 4px 8px;
         }
     </style>
 </head>
@@ -59,60 +53,37 @@
     </tbody>
 </table>
 
-<div class="add-form">
-    <input type="text" id="newItem" placeholder="Enter new item">
-    <button onclick="addItem()">Add</button>
-</div>
-
 <script>
-    let items = [];
-    let nextId = 1;
-
-    function renderList() {
-        const listBody = document.getElementById('listBody');
-        listBody.innerHTML = '';
-
-        items.forEach((item, index) => {
-            const row = document.createElement('tr');
-            row.innerHTML = `
-                <td>${index + 1}</td>
-                <td>${item.text}</td>
-                <td><button onclick="removeItem(${index})">Remove</button></td>
-            `;
-            listBody.appendChild(row);
-        });
+    function enableEdit(id, currentText) {
+        const row = document.getElementById('row-' + id);
+        row.innerHTML = `
+            <td>${id}</td>
+            <td><input type="text" id="edit-${id}" class="edit-input" value="${currentText}"></td>
+            <td><button class="save-btn" onclick="saveEdit(${id})">Save</button></td>
+        `;
     }
 
-    function addItem() {
-        const newItemInput = document.getElementById('newItem');
-        const newItemText = newItemInput.value.trim();
+    function saveEdit(id) {
+        const newText = document.getElementById('edit-' + id).value.trim();
 
-        if (newItemText) {
-            items.push({ id: nextId++, text: newItemText });
-            newItemInput.value = '';
-            renderList();
-        }
-    }
-
-    function removeItem(index) {
-        items.splice(index, 1);
-        renderList();
-    }
-</script>
-<script>
-    function toggleEdit(id) {
-        const textEl = document.getElementById(`text-${id}`);
-        const formEl = document.getElementById(`form-${id}`);
-        if (formEl.style.display === 'none') {
-            formEl.style.display = 'inline';
-            textEl.style.display = 'none';
-        } else {
-            formEl.style.display = 'none';
-            textEl.style.display = 'inline';
+        if (newText) {
+            fetch('/edit', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ id, text: newText })
+            })
+            .then(response => {
+                if (response.ok) {
+                    window.location.reload();
+                } else {
+                    alert('Failed to update item');
+                }
+            });
         }
     }
 </script>
-
 
 </body>
 </html>
