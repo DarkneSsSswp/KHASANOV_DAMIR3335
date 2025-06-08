@@ -8,41 +8,36 @@ const PORT = 3000;
 const dbConfig = {
     host: 'localhost',
     user: 'root',
-    password: 'pass',
+    password: '',
     database: 'todolist',
 };
 
 async function retrieveListItems() {
-    try {
-        const connection = await mysql.createConnection(dbConfig);
-        const query = 'SELECT id, text FROM items';
-        const [rows] = await connection.execute(query);
-        await connection.end();
-        return rows;
-    } catch (error) {
-        console.error('Error retrieving list items:', error);
-        throw error;
-    }
+    const connection = await mysql.createConnection(dbConfig);
+    const [rows] = await connection.execute('SELECT id, text FROM items');
+    await connection.end();
+    return rows;
+}
+
+async function deleteItemFromDatabase(id) {
+    const connection = await mysql.createConnection(dbConfig);
+    await connection.execute('DELETE FROM items WHERE id = ?', [id]);
+    await connection.end();
 }
 
 async function getHtmlRows() {
     const todoItems = await retrieveListItems();
-    return todoItems.map((item, index) => `
+    return todoItems.map(item => `
         <tr>
-            <td>${index + 1}</td>
+            <td>${item.id}</td>
             <td>${item.text}</td>
-            <td>
-                <form method="POST" action="/delete" style="display:inline;">
-                    <input type="hidden" name="id" value="${item.id}" />
-                    <button type="submit">Удалить</button>
-                </form>
-            </td>
+            <td><button onclick="deleteItem(${item.id})">Delete</button></td>
         </tr>
     `).join('');
 }
 
 async function handleRequest(req, res) {
-    if (req.url === '/' && req.method === 'GET') {
+    if (req.method === 'GET' && req.url === '/') {
         try {
             const html = await fs.promises.readFile(
                 path.join(__dirname, 'index.html'),
@@ -52,32 +47,33 @@ async function handleRequest(req, res) {
             res.writeHead(200, { 'Content-Type': 'text/html' });
             res.end(processedHtml);
         } catch (err) {
-            console.error(err);
-            res.writeHead(500, { 'Content-Type': 'text/plain' });
-            res.end('Error loading index.html');
+            res.writeHead(500);
+            res.end('Error loading HTML');
         }
+
     } else if (req.method === 'POST' && req.url === '/delete') {
         let body = '';
         req.on('data', chunk => body += chunk);
         req.on('end', async () => {
-            const parsed = new URLSearchParams(body);
-            const id = parsed.get('id');
-
             try {
-                const connection = await mysql.createConnection(dbConfig);
-                await connection.execute('DELETE FROM items WHERE id = ?', [id]);
-                await connection.end();
-
-                res.writeHead(302, { Location: '/' });
-                res.end();
+                const { id } = JSON.parse(body);
+                if (id && Number.isInteger(id)) {
+                    await deleteItemFromDatabase(id);
+                    res.writeHead(200);
+                    res.end('Item deleted');
+                } else {
+                    res.writeHead(400);
+                    res.end('Invalid ID');
+                }
             } catch (err) {
-                console.error('Error deleting item:', err);
+                console.error(err);
                 res.writeHead(500);
-                res.end('Internal Server Error');
+                res.end('Server error');
             }
         });
+
     } else {
-        res.writeHead(404, { 'Content-Type': 'text/plain' });
+        res.writeHead(404);
         res.end('Route not found');
     }
 }
